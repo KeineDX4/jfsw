@@ -27,6 +27,10 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "baselayer.h"
 #include "osd.h"
 
+#ifdef __SYMBIAN32__
+#include <string.h>   /* Belle: strcmp/strcpy for the OggTrackName migration */
+#endif
+
 #include "settings.h"
 #include "mytypes.h"
 #include "develop.h"
@@ -626,7 +630,16 @@ int32 CONFIG_ReadSetup( void )
 
       SCRIPT_GetString( scripthandle, "Sound Setup", "OggTrackName", oggtrackname, sizeof(oggtrackname));
       if(oggtrackname[0] != '\0')
+        {
+#ifdef __SYMBIAN32__
+        /* Belle: migrate the old default ("track??.ogg"). The music files live
+           in the Music\ subfolder on the E7, so a stale config that omits the
+           subfolder would make LoadSong fail (Can't play OGG music track). */
+        if (strcmp(oggtrackname, "track??.ogg") == 0)
+            strcpy(oggtrackname, "Music/Track??.ogg");
+#endif
         memcpy(gs.OggTrackName, oggtrackname, MAXOGGTRACKLENGTH);
+        }
 
       SCRIPT_GetNumber( scripthandle, "Setup", "ForceSetup",&ForceSetup);
       SCRIPT_GetNumber( scripthandle, "Controls","UseMouse",&UseMouse);

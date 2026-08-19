@@ -65,6 +65,9 @@ Things required to make savegames work:
 //#include "config.h"
 
 #include "menus.h"
+#ifdef __SYMBIAN32__
+#include "belle_config.h"   // JFSW-Symbian: BELLE_GAME_DIR (game-data folder on the phone)
+#endif
 
 #include "control.h"
 #include "function.h"
@@ -218,7 +221,11 @@ TRUE, // voxels
 FALSE, // stats
 FALSE, // mouse aiming on
 FALSE, // play cd
+#ifdef __SYMBIAN32__
+"Music/Track??.ogg", // ogg track name   (Belle: music lives in Music\ subfolder)
+#else
 "track??.ogg", // ogg track name
+#endif
 8, // panel scale
 };
 GAME_SET gs;
@@ -752,6 +759,13 @@ LoadLevel(char *filename)
 VOID
 LoadImages(char *filename)
     {
+    // E7 port: tile cache at 32MB. v7's 8MB caused allocation bursts that raced
+    // the (then runtime-allocated) main-thread frame buffer -> black screen; that
+    // race is gone since belle_main.cpp pre-allocates g_scaled before the game thread
+    // starts. 32MB gives the engine's allocache more eviction headroom -- v6-v11
+    // all crashed ~5s into level 2 (tc~640) with a cache-health theory pointing at
+    // allocache's "CACHE SPACE ALL LOCKED UP!" / "BUFFER TOO BIG" reportandexit()
+    // -- and cuts on-demand ART reloads from the flash drive during gameplay.
     if (loadpics(filename, 32*1048576) == -1)
         {
         TerminateGame();
@@ -811,6 +825,20 @@ void Set_GameMode(void)
     {
     extern int ScreenMode, ScreenDisplay, ScreenWidth, ScreenHeight, ScreenBPP;
     int result;
+
+#ifdef __SYMBIAN32__
+    // E7 (Belle): 8-bit software renderer only (the GPU stays idle until a future
+    // GLES2/Polymost port). 320x200 is the native Shadow Warrior resolution --
+    // exactly 4x fewer pixels than 640x480, i.e. roughly 4x faster software
+    // rasterization on the 680 MHz ARM11. Forced here (not via sw.cfg, which may
+    // carry a stale 640x480 or a DOS-only ScreenMode) so the effective mode is
+    // deterministic. belle_layer.c's setvideomode accepts 320x200x8 fullscreen.
+    ScreenMode = 1;
+    ScreenDisplay = 0;
+    ScreenWidth = 320;
+    ScreenHeight = 200;
+    ScreenBPP = 8;
+#endif
 
     //DSPRINTF(ds,"ScreenMode %d, ScreenDisplay %d, ScreenWidth %d, ScreenHeight %d",ScreenMode, ScreenDisplay, ScreenWidth, ScreenHeight);
     //MONO_PRINT(ds);
@@ -3394,6 +3422,28 @@ int app_main(int argc, char const * const argv[])
     }
 #endif
 
+#ifdef __SYMBIAN32__
+    // Symbian (Nokia E7): the game data lives in BELLE_GAME_DIR (jfsw.pro), the
+    // on-device folder next to SW.GRP. mkdir() here creates only one level, so the
+    // parent drive root is made first. addsearchpath() lets the engine find the
+    // GRPs, and chdir() makes this directory the process CWD: sw.log, sw.cfg and
+    // savegames (src/save.c fopen "game%d.sav") land right next to SW.GRP -- the
+    // default Symbian process CWD is a private directory the user can't browse.
+    {
+        char belle_dir[BMAX_PATH+1];
+        char *slash;
+        strcpy(belle_dir, BELLE_GAME_DIR);
+        slash = strrchr(belle_dir, '/');
+        if (slash) {
+            *slash = 0;
+            mkdir(belle_dir, S_IRWXU);
+        }
+        mkdir(BELLE_GAME_DIR, S_IRWXU);
+        addsearchpath(BELLE_GAME_DIR);
+        chdir(BELLE_GAME_DIR);
+    }
+#endif
+
     {
         char *supportdir = Bgetsupportdir(TRUE);
         char *appdir = Bgetappdir();
@@ -3449,6 +3499,8 @@ int app_main(int argc, char const * const argv[])
         }
     }
 
+    // Same log file on every platform: the engine writes sw.log into the process
+    // CWD, which on Symbian the chdir() above has already pointed at BELLE_GAME_DIR.
     buildsetlogfile("sw.log");
 
     OSD_SetFunctions(

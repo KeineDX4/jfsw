@@ -31,8 +31,10 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "names2.h"
 #include "mytypes.h"
 #include "fx_man.h"
+#ifndef __SYMBIAN32__
 #include "music.h"
 #include "cd.h"
+#endif
 #include "util_lib.h"
 #include "gamedefs.h"
 #include "config.h"
@@ -436,6 +438,7 @@ PlaySong(char *song_file_name, int cdaudio_track, BOOL loop, BOOL restart)
     StopSong();
 
     if (!SW_SHAREWARE) {
+#ifndef __SYMBIAN32__
         if (CD_GetCurrentDriver() != ASS_NoSound && CDInitialized)
         {
             int status;
@@ -449,6 +452,7 @@ PlaySong(char *song_file_name, int cdaudio_track, BOOL loop, BOOL restart)
 
             buildprintf("CD play error: %s\n", CD_ErrorString(status));
         }
+#endif
 
         if (cdaudio_track >= 0)
         {
@@ -491,12 +495,15 @@ PlaySong(char *song_file_name, int cdaudio_track, BOOL loop, BOOL restart)
         return FALSE;
     }
 
+#ifndef __SYMBIAN32__
     if (!memcmp(SongPtr, "MThd", 4)) {
         MUSIC_PlaySong(SongPtr, SongLength, loop ? MUSIC_LoopSong : MUSIC_PlayOnce);
         SongType = SongTypeMIDI;
         SongName = strdup(song_file_name);
         return TRUE;
-    } else {
+    }
+#endif
+    {
         if (loop)
             SongVoice = FX_PlayLoopedAuto(SongPtr, SongLength, 0, 0, 0,
                                       255, 255, 255, FX_MUSIC_PRIORITY, MUSIC_ID);
@@ -527,10 +534,12 @@ StopSong(VOID)
 
     if (SongType == SongTypeVoc && SongVoice >= 0) {
         FX_StopSound(SongVoice);
+#ifndef __SYMBIAN32__
     } else if (SongType == SongTypeMIDI) {
         MUSIC_StopSong();
     } else if (SongType == SongTypeCDA) {
         CD_Stop();
+#endif
     }
     SongType = SongTypeNone;
 
@@ -556,6 +565,7 @@ PauseSong(BOOL pauseon)
         {
         FX_PauseSound(SongVoice, pauseon);
         }
+#ifndef __SYMBIAN32__
     else
     if (SongType == SongTypeMIDI)
         {
@@ -569,6 +579,7 @@ PauseSong(BOOL pauseon)
         {
         CD_Pause(pauseon);
         }
+#endif
 }
 
 void
@@ -581,6 +592,7 @@ SetSongVolume(int volume)
         {
         FX_SetPan(SongVoice, volume, volume, volume);
         }
+#ifndef __SYMBIAN32__
     else
     if (SongType == SongTypeMIDI)
         {
@@ -591,6 +603,7 @@ SetSongVolume(int volume)
         {
         CD_SetVolume(volume);
         }
+#endif
 }
 
 BOOL
@@ -603,6 +616,7 @@ SongIsPlaying(void)
         {
         return FX_SoundActive(SongVoice);
         }
+#ifndef __SYMBIAN32__
     else
     if (SongType == SongTypeMIDI)
         {
@@ -613,6 +627,7 @@ SongIsPlaying(void)
         {
         return CD_IsPlaying();
         }
+#endif
 
     return FALSE;
 }
@@ -766,10 +781,17 @@ void LockSound(int num)
         vp->lock++;
         if (vp->lock >= CACHE_LOCK_MAX || vp->lock == 0)
             {
+#ifdef __SYMBIAN32__
+            /* E7/NoSound: FX_SoundActive() is always FALSE, so a looping sound
+               never "finishes" and gets replayed every DoUpdateSounds3D pass,
+               growing the lock to 255 and killing the game. Recycle instead. */
+            vp->lock = CACHE_LOCK_START;
+#else
             DumpSounds();
             TerminateGame();
             printf("lock > MAX, num = %d",num);
             exit(0);
+#endif
             }
         //ASSERT(vp->lock < CACHE_LOCK_MAX);
         //ASSERT(vp->lock != 0);
@@ -1301,22 +1323,33 @@ void loadtmb(void)
 
     l = kfilelength(fil);
     kread(fil,tmb,l);
+#ifndef __SYMBIAN32__
     MUSIC_RegisterTimbreBank(tmb);
+#endif
     kclose(fil);
 }
 
 void MusicStartup( void )
     {
-    int32 status;
-    int devicetype;
-
     // if they chose None lets return
     if (MusicDevice < 0)
         {
         gs.MusicOn = FALSE;
         return;
         }
-    else if (MusicDevice == 0)
+
+#ifdef __SYMBIAN32__
+    // Belle: no MIDI/CD hardware. Music is OGG-only, played through the FX
+    // path in PlaySong() (FX_PlayLoopedAuto -> MV_PlayLoopedVorbis), so there
+    // is nothing to initialise here. Still mark music as "on" so gs.MusicOn
+    // stays TRUE and PlaySong() reaches the OGG branch. MusicDevice<0 (config
+    // "None") disables music above.
+    MusicInitialized = TRUE;
+#else
+    int32 status;
+    int devicetype;
+
+    if (MusicDevice == 0)
         {
         devicetype = ASS_AutoDetect;
         }
@@ -1352,6 +1385,7 @@ void MusicStartup( void )
 
     if (MusicInitialized)
        loadtmb();
+#endif
     }
 
 void COVER_SetReverb(int amt)
@@ -1370,6 +1404,13 @@ void COVER_SetReverb(int amt)
 void
 MusicShutdown(void)
     {
+#ifdef __SYMBIAN32__
+    if (!MusicInitialized)
+        return;
+
+    MusicInitialized = FALSE;
+    StopSong();
+#else
     int32 status;
 
     if (CDInitialized)
@@ -1389,6 +1430,7 @@ MusicShutdown(void)
         {
         buildprintf("Music error: %s\n",MUSIC_ErrorString(MUSIC_ErrorCode));
         }
+#endif
     }
 
 ///////////////////////////////////////////////////////////////////////////////
