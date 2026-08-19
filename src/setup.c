@@ -342,7 +342,9 @@ void main()
 
    // start playing a song
 
+#ifndef __SYMBIAN32__
    MUSIC_PlaySong( song, MUSIC_LoopSong );
+#endif
 
 
    lasttime = timer;

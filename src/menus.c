@@ -997,16 +997,33 @@ BOOL MNU_KeySetupCustom(UserCall call, MenuItem *item)
 
 	if (currentmode) {
 		// customising a key
-		char *strs[] = { "Press the key to assign to", "\"%s\" %s", "or ESCAPE to cancel." };
+		char *strs[] = { "Press the key to assign to", "\"%s\" %s",
+#ifdef __SYMBIAN32__
+				 "or BACKSPACE to cancel." };
+#else
+				 "or ESCAPE to cancel." };
+#endif
 		char *col[2] = { "(primary)", "(secondary)" };
 		short w, h = 8;
 		int i, j, y, sc;
 
 		sc = KB_GetLastScanCode();
+#ifdef __SYMBIAN32__
+		if (sc == KEYSC_ESC || sc == sc_BackSpace) {
+			KB_ClearKeyDown(sc_Escape);
+			KB_ClearKeyDown(sc_BackSpace);
+			currentmode = 0;
+		} else if (sc == sc_LeftShift || sc == sc_RightShift
+		        || sc == sc_LeftControl || sc == sc_LeftAlt
+		        || sc == sc_CapsLock) {
+			/* modifier key alone: keep waiting for the real key */
+		} else if (sc > 0) {
+#else
 		if (sc == KEYSC_ESC) {
 			KB_ClearKeyDown(sc_Escape);
 			currentmode = 0;
 		} else if (sc > 0) {
+#endif
 			KB_ClearKeyDown( sc );
 
 			KeyboardKeys[currentkey][currentcol] = sc;
