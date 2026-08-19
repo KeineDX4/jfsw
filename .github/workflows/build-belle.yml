@@ -35,9 +35,14 @@ jobs:
           submodules: true
       - name: Stamp build version
         # The container stages the tree without .git, so the version strings
-        # (game_version from this repo, build_version from the jfbuild submodule)
-        # must be generated here, before the container starts. Same mechanism as
-        # the desktop Makefiles (Makefile:274-277, jfbuild/Makefile:260-263).
+        # (game_version from this repo, build_version from the jfbuild
+        # submodule) must be generated here, before the container starts. Each
+        # version file lives in its own tree with a DISTINCT basename
+        # (src/version-auto.c, jfbuild/src/build-version-auto.c): under
+        # qmake->.mmp->sbs everything compiles into one build dir keyed by
+        # source basename, so two files named version-auto.c would collapse into
+        # one object. Same mechanism as the desktop Makefiles (Makefile:274-277,
+        # jfbuild/Makefile:260-263); see jfsw.pro.
         run: bash tools/stamp-version.sh
       - name: Pull Belle toolchain image
         run: docker pull keinedx2/symbian-belle-buildtools:final

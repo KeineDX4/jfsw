@@ -144,25 +144,40 @@ SOURCES += \
     jfaudiolib/src/vorbis.c
 
 # --- Version stamping (mirrors the desktop Makefiles) ---
-# On desktop, when git is present the build regenerates version-auto.c from
-# `git describe --always` and compiles it INSTEAD of the committed version.c
-# fallback (Makefile:204-210, 274-277; jfbuild/Makefile:168-172, 260-263).
-# The Symbian pipeline stages the project WITHOUT .git, so the version files
-# are stamped on the HOST before the container runs (see tools/stamp-version.sh
-# and .github/workflows/build-belle.yml). These exists() rules pick up the
-# stamped file when present, and fall back to the committed version.c otherwise
-# -- exactly like the desktop Makefile's git check. Two files, two versions:
-#   src/version.c         -> game_version    (startup window, console banner)
-#   jfbuild/src/version.c -> build_version   (engine BUILD banner, engine.c:5429)
+# On desktop, when git is present each Makefile regenerates ITS OWN
+# version-auto.c and compiles it instead of the committed version.c fallback:
+# the game defines game_version (startup window, console banner; game.c:3517,
+# startwin_game.c:671) via src/version.c / src/version-auto.c; the engine
+# defines build_version (BUILD banner, engine.c:5429) via
+# jfbuild/src/build-version.c / build-version-auto.c (Makefile:204-210, 274-277;
+# jfbuild/Makefile:168-172, 260-263).
+#
+# The Symbian pipeline stages the project WITHOUT .git, so the version files are
+# stamped on the HOST before the container runs (tools/stamp-version.sh,
+# .github/workflows/build-belle.yml). These exists() rules pick the stamped file
+# when present and fall back to the committed file otherwise -- exactly like the
+# desktop Makefiles' git check. Two files, two versions, each in its own tree:
+#   src/version.c / src/version-auto.c                 -> game_version
+#   jfbuild/src/build-version.c / build-version-auto.c -> build_version
+#
+# IMPORTANT: unlike desktop (where the game and engine are built by two separate
+# Makefiles that never share an object dir), the Symbian qmake -> .mmp -> sbs
+# pipeline compiles everything into ONE build dir and names objects after the
+# SOURCE BASENAME. Two sources with the same basename would collapse into one .o
+# (sbs warning "overriding commands for target ...", then multiple-definition /
+# undefined-symbol link errors). The game and engine files therefore carry
+# distinct basenames by construction: version(-auto) in src/, build-version(-auto)
+# in jfbuild/src/. (jfbuild/src/version.c was renamed to build-version.c so the
+# engine never ships a second file named version.c / version-auto.c.)
 exists(src/version-auto.c) {
     SOURCES += src/version-auto.c
 } else {
     SOURCES += src/version.c
 }
-exists(jfbuild/src/version-auto.c) {
-    SOURCES += jfbuild/src/version-auto.c
+exists(jfbuild/src/build-version-auto.c) {
+    SOURCES += jfbuild/src/build-version-auto.c
 } else {
-    SOURCES += jfbuild/src/version.c
+    SOURCES += jfbuild/src/build-version.c
 }
 
 INCLUDEPATH += \
